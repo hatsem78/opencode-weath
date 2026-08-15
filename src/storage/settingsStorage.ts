@@ -1,7 +1,8 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Config } from "./types.ts";
+import type { Config } from "../types/City.ts";
+import type { Unit } from "../types/Weather.ts";
 
 const CONFIG_PATH = join(homedir(), ".weath.json");
 
@@ -31,4 +32,14 @@ export function saveConfig(config: Config): void {
   const dir = CONFIG_PATH.replace(/\/[^/]+$/, "");
   mkdirSync(dir, { recursive: true });
   writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+}
+
+export function getUnit(): Unit {
+  return loadConfig().unit;
+}
+
+export function setUnit(unit: Unit): void {
+  const config = loadConfig();
+  config.unit = unit;
+  saveConfig(config);
 }

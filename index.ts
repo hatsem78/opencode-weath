@@ -1,309 +1,51 @@
-import { describeWeather, formatTemperature, getDailyForecast, getTemperature, searchCity } from "./src/api.ts";
-import { cyan, green, red, yellow } from "./src/colors.ts";
-import { loadConfig, saveConfig } from "./src/config.ts";
-import type { City, Config, GeocodingResult, Unit } from "./src/types.ts";
+import { showAddCity } from "./src/actions/addCity.ts";
+import { showForecast } from "./src/actions/getForecast.ts";
+import { showAllCitiesWeather, showDefaultCityWeather } from "./src/actions/getWeather.ts";
+import { showRemoveCity } from "./src/actions/removeCity.ts";
+import { showSetDefaultCity } from "./src/actions/setDefaultCity.ts";
+import { toggleUnit } from "./src/actions/settings.ts";
+import { promptInput, waitForEnter } from "./src/presentation/input.ts";
+import { renderMenu } from "./src/presentation/menu.ts";
+import { printError, printSuccess } from "./src/presentation/output.ts";
+import { listCities } from "./src/storage/citiesStorage.ts";
+import { getUnit } from "./src/storage/settingsStorage.ts";
+import type { MenuOption } from "./src/types/MenuOption.ts";
 
-const stdinIterator = process.stdin[Symbol.asyncIterator]();
-let stdinBuffer = "";
-let stdinClosed = false;
-
-async function readLine(): Promise<string> {
-  while (true) {
-    const newlineIndex = stdinBuffer.indexOf("\n");
-    if (newlineIndex !== -1) {
-      const line = stdinBuffer.slice(0, newlineIndex);
-      stdinBuffer = stdinBuffer.slice(newlineIndex + 1);
-      return line.replace(/\r$/, "").trim();
-    }
-    if (stdinClosed) {
-      return stdinBuffer.trim();
-    }
-    const next = await stdinIterator.next();
-    if (next.done) {
-      stdinClosed = true;
-      const line = stdinBuffer;
-      stdinBuffer = "";
-      return line.trim();
-    }
-    stdinBuffer += new TextDecoder().decode(next.value as Uint8Array);
-  }
-}
-
-async function promptInput(question: string): Promise<string> {
-  process.stdout.write(question);
-  return readLine();
-}
-
-const WIDTH = 40;
-
-function renderMenu(unit: Unit, cityCount: number): void {
+function buildMenuOptions(): MenuOption[] {
+  const unit = getUnit();
   const unitLabel = unit === "celsius" ? "°C" : "°F";
-  const line = cyan("═".repeat(WIDTH));
-  console.log(line);
-  console.log(" ".repeat((WIDTH - "WEATHER CLI".length) / 2) + cyan("WEATHER CLI"));
-  console.log(line);
-  console.log(cyan("  1. Clima de ciudad default"));
-  console.log(cyan(`  2. Clima de todas las ciudades (${cityCount})`));
-  console.log(cyan("  3. Buscar y agregar ciudad"));
-  console.log(cyan("  4. Eliminar ciudad"));
-  console.log(cyan("  5. Establecer ciudad default"));
-  console.log(cyan("  6. Pronóstico 7 días"));
-  console.log(cyan(`  8. Ajustes (${unitLabel})`));
-  console.log(cyan("  9. Salir"));
-  console.log(line);
-}
+  const cityCount = listCities().length;
 
-async function waitForEnter(): Promise<void> {
-  await promptInput("Presiona Enter para continuar...");
-}
-
-async function handleDefaultCity(config: Config): Promise<void> {
-  if (!config.defaultCity) {
-    console.log("No hay ciudad default configurada. Usa la opción 5 para establecerla.");
-    return;
-  }
-
-  const city = config.cities.find((c) => c.name === config.defaultCity);
-  if (!city) {
-    console.log("La ciudad default ya no está en tu lista. Usa la opción 5 para elegir otra.");
-    return;
-  }
-
-  try {
-    const temp = await getTemperature(city.latitude, city.longitude, config.unit);
-    console.log(`🌤️  ${city.name}: ${yellow(formatTemperature(temp, config.unit))}`);
-  } catch (err) {
-    console.log(red(`Error al consultar el clima: ${(err as Error).message}`));
-  }
-}
-
-async function handleAllCities(config: Config): Promise<void> {
-  if (config.cities.length === 0) {
-    console.log("No hay ciudades registradas. Usa la opción 3 para agregar una.");
-    return;
-  }
-
-  for (const city of config.cities) {
-    try {
-      const temp = await getTemperature(city.latitude, city.longitude, config.unit);
-      const marker = city.name === config.defaultCity ? " ★" : "";
-      console.log(`🌤️  ${city.name}${marker}: ${yellow(formatTemperature(temp, config.unit))}`);
-    } catch (err) {
-      console.log(red(`⚠️  ${city.name}: error al consultar (${(err as Error).message})`));
-    }
-  }
-}
-
-function cityLabel(city: City): string {
-  const parts = [city.country, city.region].filter(Boolean);
-  return parts.length > 0 ? `${city.name} (${parts.join(", ")})` : city.name;
-}
-
-function resultLabel(result: GeocodingResult): string {
-  const parts = [result.country, result.admin1].filter(Boolean);
-  return parts.length > 0 ? `${result.name} (${parts.join(", ")})` : result.name;
-}
-
-async function handleAddCity(config: Config): Promise<void> {
-  const query = await promptInput("Nombre de la ciudad: ");
-  if (!query) {
-    console.log("Búsqueda cancelada.");
-    return;
-  }
-
-  let results: GeocodingResult[];
-  try {
-    results = await searchCity(query);
-  } catch (err) {
-    console.log(red(`Error en la búsqueda: ${(err as Error).message}`));
-    return;
-  }
-
-  if (results.length === 0) {
-    console.log("No se encontraron ciudades con ese nombre.");
-    return;
-  }
-
-  console.log("Resultados:");
-  results.forEach((r, i) => console.log(`  ${i + 1}. ${resultLabel(r)}`));
-
-  const choice = await promptInput("Selecciona una ciudad (o vacío para cancelar): ");
-  if (!choice) {
-    console.log("Operación cancelada.");
-    return;
-  }
-
-  const idx = parseInt(choice, 10) - 1;
-  const selected = results[idx];
-  if (!selected) {
-    console.log(red("Selección inválida."));
-    return;
-  }
-
-  const city: City = {
-    name: selected.name,
-    country: selected.country,
-    region: selected.admin1,
-    latitude: selected.latitude,
-    longitude: selected.longitude,
-  };
-
-  if (config.cities.some((c) => c.name === city.name && c.latitude === city.latitude && c.longitude === city.longitude)) {
-    console.log(red(`La ciudad "${city.name}" ya está en tu lista.`));
-    return;
-  }
-
-  config.cities.push(city);
-  saveConfig(config);
-  console.log(green(`Ciudad "${city.name}" agregada.`));
-}
-
-async function handleDeleteCity(config: Config): Promise<void> {
-  if (config.cities.length === 0) {
-    console.log("No hay ciudades registradas.");
-    return;
-  }
-
-  console.log("Tus ciudades:");
-  config.cities.forEach((c, i) => console.log(`  ${i + 1}. ${cityLabel(c)}`));
-
-  const choice = await promptInput("Selecciona una ciudad para eliminar (o vacío para cancelar): ");
-  if (!choice) {
-    console.log("Operación cancelada.");
-    return;
-  }
-
-  const idx = parseInt(choice, 10) - 1;
-  const selected = config.cities[idx];
-  if (!selected) {
-    console.log(red("Selección inválida."));
-    return;
-  }
-
-  config.cities.splice(idx, 1);
-  if (config.defaultCity === selected.name) {
-    config.defaultCity = config.cities[0]?.name ?? null;
-  }
-  saveConfig(config);
-  console.log(green(`Ciudad "${selected.name}" eliminada.`));
-}
-
-async function handleSetDefault(config: Config): Promise<void> {
-  if (config.cities.length === 0) {
-    console.log("No hay ciudades registradas. Usa la opción 3 para agregar una.");
-    return;
-  }
-
-  console.log("Tus ciudades:");
-  config.cities.forEach((c, i) => console.log(`  ${i + 1}. ${cityLabel(c)}`));
-
-  const choice = await promptInput("Selecciona la ciudad default (o vacío para cancelar): ");
-  if (!choice) {
-    console.log("Operación cancelada.");
-    return;
-  }
-
-  const idx = parseInt(choice, 10) - 1;
-  const selected = config.cities[idx];
-  if (!selected) {
-    console.log(red("Selección inválida."));
-    return;
-  }
-
-  config.defaultCity = selected.name;
-  saveConfig(config);
-  console.log(green(`Ciudad default establecida: ${selected.name}`));
-}
-
-function formatForecastDate(dateStr: string): string {
-  const date = new Date(`${dateStr}T12:00:00`);
-  return date.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "short" });
-}
-
-async function handleForecast(config: Config): Promise<void> {
-  if (config.cities.length === 0) {
-    console.log("No hay ciudades registradas. Usa la opción 3 para agregar una.");
-    return;
-  }
-
-  console.log("Tus ciudades:");
-  config.cities.forEach((c, i) => console.log(`  ${i + 1}. ${cityLabel(c)}`));
-
-  const choice = await promptInput("Selecciona una ciudad para el pronóstico (o vacío para cancelar): ");
-  if (!choice) {
-    console.log("Operación cancelada.");
-    return;
-  }
-
-  const idx = parseInt(choice, 10) - 1;
-  const selected = config.cities[idx];
-  if (!selected) {
-    console.log(red("Selección inválida."));
-    return;
-  }
-
-  try {
-    const forecast = await getDailyForecast(selected.latitude, selected.longitude, config.unit);
-    console.log(cyan(`📅  Pronóstico de 7 días — ${selected.name}:`));
-    for (const day of forecast) {
-      const weather = describeWeather(day.weatherCode);
-      const label = formatForecastDate(day.time);
-      console.log(
-        `  ${weather.icon} ${label}: mín ${yellow(formatTemperature(day.temperatureMin, config.unit))} · ` +
-          `máx ${yellow(formatTemperature(day.temperatureMax, config.unit))} — ${weather.label}`,
-      );
-    }
-  } catch (err) {
-    console.log(red(`Error al consultar el pronóstico: ${(err as Error).message}`));
-  }
-}
-
-async function handleSettings(config: Config): Promise<void> {
-  config.unit = config.unit === "celsius" ? "fahrenheit" : "celsius";
-  saveConfig(config);
-  const label = config.unit === "celsius" ? "°C" : "°F";
-  console.log(green(`Unidad de temperatura cambiada a ${label}.`));
+  return [
+    { value: "1", label: "Clima de ciudad default", handler: showDefaultCityWeather },
+    { value: "2", label: `Clima de todas las ciudades (${cityCount})`, handler: showAllCitiesWeather },
+    { value: "3", label: "Buscar y agregar ciudad", handler: showAddCity },
+    { value: "4", label: "Eliminar ciudad", handler: showRemoveCity },
+    { value: "5", label: "Establecer ciudad default", handler: showSetDefaultCity },
+    { value: "6", label: "Pronóstico 7 días", handler: showForecast },
+    { value: "8", label: `Ajustes (${unitLabel})`, handler: toggleUnit },
+    { value: "9", label: "Salir", handler: async () => {} },
+  ];
 }
 
 async function main(): Promise<void> {
-  const config = loadConfig();
-
   while (true) {
-    renderMenu(config.unit, config.cities.length);
+    const options = buildMenuOptions();
+    renderMenu(options);
     const option = await promptInput("  Selecciona una opción: ");
 
-    switch (option) {
-      case "1":
-        await handleDefaultCity(config);
-        break;
-      case "2":
-        await handleAllCities(config);
-        break;
-      case "3":
-        await handleAddCity(config);
-        break;
-      case "4":
-        await handleDeleteCity(config);
-        break;
-      case "5":
-        await handleSetDefault(config);
-        break;
-      case "6":
-        await handleForecast(config);
-        break;
-      case "8":
-        await handleSettings(config);
-        break;
-      case "9":
-        console.log(green("¡Hasta luego!"));
-        return;
-      default:
-        console.log(red("Opción inválida."));
+    const selected = options.find((o) => o.value === option);
+    if (selected?.value === "9") {
+      printSuccess("¡Hasta luego!");
+      return;
+    }
+    if (selected) {
+      await selected.handler();
+    } else {
+      printError("Opción inválida.");
     }
 
-    if (option !== "9") {
-      await waitForEnter();
-    }
+    await waitForEnter();
   }
 }
 
