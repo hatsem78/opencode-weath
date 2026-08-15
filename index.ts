@@ -1,4 +1,5 @@
 import { formatTemperature, getTemperature, searchCity } from "./src/api.ts";
+import { cyan, green, red, yellow } from "./src/colors.ts";
 import { loadConfig, saveConfig } from "./src/config.ts";
 import type { City, Config, GeocodingResult, Unit } from "./src/types.ts";
 
@@ -37,17 +38,17 @@ const WIDTH = 40;
 
 function renderMenu(unit: Unit, cityCount: number): void {
   const unitLabel = unit === "celsius" ? "°C" : "°F";
-  const line = "═".repeat(WIDTH);
+  const line = cyan("═".repeat(WIDTH));
   console.log(line);
-  console.log(" ".repeat((WIDTH - "WEATHER CLI".length) / 2) + "WEATHER CLI");
+  console.log(" ".repeat((WIDTH - "WEATHER CLI".length) / 2) + cyan("WEATHER CLI"));
   console.log(line);
-  console.log("  1. Clima de ciudad default");
-  console.log(`  2. Clima de todas las ciudades (${cityCount})`);
-  console.log("  3. Buscar y agregar ciudad");
-  console.log("  4. Eliminar ciudad");
-  console.log("  5. Establecer ciudad default");
-  console.log(`  8. Ajustes (${unitLabel})`);
-  console.log("  9. Salir");
+  console.log(cyan("  1. Clima de ciudad default"));
+  console.log(cyan(`  2. Clima de todas las ciudades (${cityCount})`));
+  console.log(cyan("  3. Buscar y agregar ciudad"));
+  console.log(cyan("  4. Eliminar ciudad"));
+  console.log(cyan("  5. Establecer ciudad default"));
+  console.log(cyan(`  8. Ajustes (${unitLabel})`));
+  console.log(cyan("  9. Salir"));
   console.log(line);
 }
 
@@ -69,9 +70,9 @@ async function handleDefaultCity(config: Config): Promise<void> {
 
   try {
     const temp = await getTemperature(city.latitude, city.longitude, config.unit);
-    console.log(`🌤️  ${city.name}: ${formatTemperature(temp, config.unit)}`);
+    console.log(`🌤️  ${city.name}: ${yellow(formatTemperature(temp, config.unit))}`);
   } catch (err) {
-    console.log(`Error al consultar el clima: ${(err as Error).message}`);
+    console.log(red(`Error al consultar el clima: ${(err as Error).message}`));
   }
 }
 
@@ -85,9 +86,9 @@ async function handleAllCities(config: Config): Promise<void> {
     try {
       const temp = await getTemperature(city.latitude, city.longitude, config.unit);
       const marker = city.name === config.defaultCity ? " ★" : "";
-      console.log(`🌤️  ${city.name}${marker}: ${formatTemperature(temp, config.unit)}`);
+      console.log(`🌤️  ${city.name}${marker}: ${yellow(formatTemperature(temp, config.unit))}`);
     } catch (err) {
-      console.log(`⚠️  ${city.name}: error al consultar (${(err as Error).message})`);
+      console.log(red(`⚠️  ${city.name}: error al consultar (${(err as Error).message})`));
     }
   }
 }
@@ -113,7 +114,7 @@ async function handleAddCity(config: Config): Promise<void> {
   try {
     results = await searchCity(query);
   } catch (err) {
-    console.log(`Error en la búsqueda: ${(err as Error).message}`);
+    console.log(red(`Error en la búsqueda: ${(err as Error).message}`));
     return;
   }
 
@@ -134,7 +135,7 @@ async function handleAddCity(config: Config): Promise<void> {
   const idx = parseInt(choice, 10) - 1;
   const selected = results[idx];
   if (!selected) {
-    console.log("Selección inválida.");
+    console.log(red("Selección inválida."));
     return;
   }
 
@@ -147,13 +148,13 @@ async function handleAddCity(config: Config): Promise<void> {
   };
 
   if (config.cities.some((c) => c.name === city.name && c.latitude === city.latitude && c.longitude === city.longitude)) {
-    console.log(`La ciudad "${city.name}" ya está en tu lista.`);
+    console.log(red(`La ciudad "${city.name}" ya está en tu lista.`));
     return;
   }
 
   config.cities.push(city);
   saveConfig(config);
-  console.log(`Ciudad "${city.name}" agregada.`);
+  console.log(green(`Ciudad "${city.name}" agregada.`));
 }
 
 async function handleDeleteCity(config: Config): Promise<void> {
@@ -174,7 +175,7 @@ async function handleDeleteCity(config: Config): Promise<void> {
   const idx = parseInt(choice, 10) - 1;
   const selected = config.cities[idx];
   if (!selected) {
-    console.log("Selección inválida.");
+    console.log(red("Selección inválida."));
     return;
   }
 
@@ -183,7 +184,7 @@ async function handleDeleteCity(config: Config): Promise<void> {
     config.defaultCity = config.cities[0]?.name ?? null;
   }
   saveConfig(config);
-  console.log(`Ciudad "${selected.name}" eliminada.`);
+  console.log(green(`Ciudad "${selected.name}" eliminada.`));
 }
 
 async function handleSetDefault(config: Config): Promise<void> {
@@ -204,20 +205,20 @@ async function handleSetDefault(config: Config): Promise<void> {
   const idx = parseInt(choice, 10) - 1;
   const selected = config.cities[idx];
   if (!selected) {
-    console.log("Selección inválida.");
+    console.log(red("Selección inválida."));
     return;
   }
 
   config.defaultCity = selected.name;
   saveConfig(config);
-  console.log(`Ciudad default establecida: ${selected.name}`);
+  console.log(green(`Ciudad default establecida: ${selected.name}`));
 }
 
 async function handleSettings(config: Config): Promise<void> {
   config.unit = config.unit === "celsius" ? "fahrenheit" : "celsius";
   saveConfig(config);
   const label = config.unit === "celsius" ? "°C" : "°F";
-  console.log(`Unidad de temperatura cambiada a ${label}.`);
+  console.log(green(`Unidad de temperatura cambiada a ${label}.`));
 }
 
 async function main(): Promise<void> {
@@ -247,10 +248,10 @@ async function main(): Promise<void> {
         await handleSettings(config);
         break;
       case "9":
-        console.log("¡Hasta luego!");
+        console.log(green("¡Hasta luego!"));
         return;
       default:
-        console.log("Opción inválida.");
+        console.log(red("Opción inválida."));
     }
 
     if (option !== "9") {
