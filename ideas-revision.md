@@ -5,7 +5,7 @@
 - [ ] **Ciudades:** geocoding solo trae 1 resultado; nombres ambiguos pueden fallar.
 - [ ] **Tests:** no existen; conviene al menos probar storage y las APIs con mocks.
 - [ ] **Binario:** compila bien; revisar que `./weather` guarde datos en `~/.config/weather-cli/`.
-- [ ] **7 day forescast** agregar la posibilidad de obtner el pronóstico de clima para los proximos días
+- [x] **7 day forescast** agregar la posibilidad de obtner el pronóstico de clima para los proximos días
 - [ ] **Escalabilidad:** ¿qué tan fácil será expandir con nuevas funcionalidades?
 - [ ] **Carga:** ¿hay estado de carga en las tareas asíncronas?
 

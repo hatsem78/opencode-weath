@@ -1,4 +1,4 @@
-import { formatTemperature, getTemperature, searchCity } from "./src/api.ts";
+import { describeWeather, formatTemperature, getDailyForecast, getTemperature, searchCity } from "./src/api.ts";
 import { cyan, green, red, yellow } from "./src/colors.ts";
 import { loadConfig, saveConfig } from "./src/config.ts";
 import type { City, Config, GeocodingResult, Unit } from "./src/types.ts";
@@ -47,6 +47,7 @@ function renderMenu(unit: Unit, cityCount: number): void {
   console.log(cyan("  3. Buscar y agregar ciudad"));
   console.log(cyan("  4. Eliminar ciudad"));
   console.log(cyan("  5. Establecer ciudad default"));
+  console.log(cyan("  6. Pronóstico 7 días"));
   console.log(cyan(`  8. Ajustes (${unitLabel})`));
   console.log(cyan("  9. Salir"));
   console.log(line);
@@ -214,6 +215,49 @@ async function handleSetDefault(config: Config): Promise<void> {
   console.log(green(`Ciudad default establecida: ${selected.name}`));
 }
 
+function formatForecastDate(dateStr: string): string {
+  const date = new Date(`${dateStr}T12:00:00`);
+  return date.toLocaleDateString("es", { weekday: "long", day: "numeric", month: "short" });
+}
+
+async function handleForecast(config: Config): Promise<void> {
+  if (config.cities.length === 0) {
+    console.log("No hay ciudades registradas. Usa la opción 3 para agregar una.");
+    return;
+  }
+
+  console.log("Tus ciudades:");
+  config.cities.forEach((c, i) => console.log(`  ${i + 1}. ${cityLabel(c)}`));
+
+  const choice = await promptInput("Selecciona una ciudad para el pronóstico (o vacío para cancelar): ");
+  if (!choice) {
+    console.log("Operación cancelada.");
+    return;
+  }
+
+  const idx = parseInt(choice, 10) - 1;
+  const selected = config.cities[idx];
+  if (!selected) {
+    console.log(red("Selección inválida."));
+    return;
+  }
+
+  try {
+    const forecast = await getDailyForecast(selected.latitude, selected.longitude, config.unit);
+    console.log(cyan(`📅  Pronóstico de 7 días — ${selected.name}:`));
+    for (const day of forecast) {
+      const weather = describeWeather(day.weatherCode);
+      const label = formatForecastDate(day.time);
+      console.log(
+        `  ${weather.icon} ${label}: mín ${yellow(formatTemperature(day.temperatureMin, config.unit))} · ` +
+          `máx ${yellow(formatTemperature(day.temperatureMax, config.unit))} — ${weather.label}`,
+      );
+    }
+  } catch (err) {
+    console.log(red(`Error al consultar el pronóstico: ${(err as Error).message}`));
+  }
+}
+
 async function handleSettings(config: Config): Promise<void> {
   config.unit = config.unit === "celsius" ? "fahrenheit" : "celsius";
   saveConfig(config);
@@ -243,6 +287,9 @@ async function main(): Promise<void> {
         break;
       case "5":
         await handleSetDefault(config);
+        break;
+      case "6":
+        await handleForecast(config);
         break;
       case "8":
         await handleSettings(config);
