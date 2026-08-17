@@ -1,10 +1,18 @@
 {
   "name": "02-weath",
+  "version": "1.0.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
   "scripts":{
     "build": "bun build --compile index.ts --outfile dist/weather",
+    "build:all": "bun run build:linux-x64 && bun run build:linux-arm64 && bun run build:windows-x64 && bun run build:windows-arm64 && bun run build:darwin-x64 && bun run build:darwin-arm64",
+    "build:linux-x64": "bun build --compile --target=bun-linux-x64 index.ts --outfile dist/weather-linux-x64",
+    "build:linux-arm64": "bun build --compile --target=bun-linux-arm64 index.ts --outfile dist/weather-linux-arm64",
+    "build:windows-x64": "bun build --compile --target=bun-windows-x64 index.ts --outfile dist/weather-windows-x64.exe",
+    "build:windows-arm64": "bun build --compile --target=bun-windows-arm64 index.ts --outfile dist/weather-windows-arm64.exe",
+    "build:darwin-x64": "bun build --compile --target=bun-darwin-x64 index.ts --outfile dist/weather-darwin-x64",
+    "build:darwin-arm64": "bun build --compile --target=bun-darwin-arm64 index.ts --outfile dist/weather-darwin-arm64",
     "start": "bun run index.ts",
     "dev": "bun run index.ts --watch",
     "test": "bun test --watch",

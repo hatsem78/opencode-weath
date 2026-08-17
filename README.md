@@ -47,3 +47,6 @@ Esta es la apariencia que deseamos crear
 ════════════════════════════════════════
   Selecciona una opción: 5
 ```
+Prompt para crear un GitHub action.
+
+Necetito  que creemos un Github Action, el cual tiene que crear un release tag de la ultima versión basada en el package.json. Dentro de ese Releese Tag. Reuerda que mediante el Bun run Build es como construye el binario.
